@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Allwissen - Sistema de Gestão de Tarefas</title>
+    <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/BrunoZachUni/Image/main/favicon_io/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Biblioteca do Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #11052C;
+            color: #E5E7EB;
+            background: radial-gradient(ellipse at center, #1a0e3c 0%, #11052C 100%);
+        }
+        .task-board-container, .item-grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .task-card, .item-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            background-color: #2a1a52;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 15px rgba(101, 66, 208, 0.2);
+        }
+        .task-card:hover, .item-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 25px rgba(161, 136, 227, 0.4);
+        }
+        .urgency-high { border-left: 4px solid #E557AE; }
+        .urgency-medium { border-left: 4px solid #A188E3; }
+        .urgency-low { border-left: 4px solid #6542D0; }
+        .sidebar {
+            background-color: rgba(17, 5, 44, 0.9);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 25px rgba(161, 136, 227, 0.15);
+            transition: transform 0.3s ease-in-out;
+        }
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            z-index: 50;
+        }
+        .modal-content {
+             box-shadow: 0 0 30px rgba(161, 136, 227, 0.3);
+        }
+        .file-list-item:hover {
+            background-color: #3c2a75;
+        }
+        .spinner {
+            border-top-color: #A188E3;
+            animation: spin 1s linear infinite;
+        }
+        .action-button {
+            box-shadow: 0 0 15px rgba(229, 87, 174, 0.3);
+        }
+        .action-button:hover {
+            box-shadow: 0 0 25px rgba(229, 87, 174, 0.5);
+        }
+        input:focus, select:focus, textarea:focus {
+            box-shadow: 0 0 15px rgba(161, 136, 227, 0.5);
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1a0e3c; }
+        ::-webkit-scrollbar-thumb { background: #6542D0; border-radius: 4px;}
+        ::-webkit-scrollbar-thumb:hover { background: #A188E3; }
+    </style>
+</head>
+<body class="h-screen overflow-hidden">
+    <div class="flex h-full">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar w-64 flex-shrink-0 p-6 flex-col justify-between fixed lg:relative lg:flex inset-y-0 left-0 transform -translate-x-full lg:translate-x-0 z-40">
+            <div>
+                <div class="flex justify-center mb-10">
+                    <img src="https://raw.githubusercontent.com/BrunoZachUni/Image/main/Allwissenheit%20(1).png" alt="Logo Allwissen" class="h-36 w-auto" onerror="this.onerror=null; this.src='https://placehold.co/144x144/11052C/A188E3?text=A'">
+                </div>
+                <nav class="flex flex-col gap-4">
+                    <a href="#" id="nav-tarefas" class="nav-link bg-[#6542D0] text-white flex items-center gap-3 p-3 rounded-lg font-semibold"><i class="fas fa-tasks w-6 text-center"></i><span>Tarefas</span></a>
+                    <a href="#" id="nav-quadro" class="nav-link text-gray-300 hover:bg-[#6542D0]/50 hover:text-white flex items-center gap-3 p-3 rounded-lg font-semibold"><i class="fas fa-columns w-6 text-center"></i><span>Quadro</span></a>
+                    <a href="#" id="nav-anotacoes" class="nav-link text-gray-300 hover:bg-[#6542D0]/50 hover:text-white flex items-center gap-3 p-3 rounded-lg font-semibold"><i class="fas fa-sticky-note w-6 text-center"></i><span>Anotações</span></a>
+                    <a href="#" id="nav-lembretes" class="nav-link text-gray-300 hover:bg-[#6542D0]/50 hover:text-white flex items-center gap-3 p-3 rounded-lg font-semibold"><i class="fas fa-bell w-6 text-center"></i><span>Lembretes</span></a>
+                    <a href="#" id="nav-manuais" class="nav-link text-gray-300 hover:bg-[#6542D0]/50 hover:text-white flex items-center gap-3 p-3 rounded-lg font-semibold"><i class="fas fa-book w-6 text-center"></i><span>Manuais</span></a>
+                    <a href="#" id="nav-contatos" class="nav-link text-gray-300 hover:bg-[#6542D0]/50 hover:text-white flex items-center gap-3 p-3 rounded-lg font-semibold"><i class="fas fa-address-book w-6 text-center"></i><span>Contatos</span></a>
+                    <a href="#" id="nav-faq" class="nav-link text-gray-300 hover:bg-[#6542D0]/50 hover:text-white flex items-center gap-3 p-3 rounded-lg font-semibold"><i class="fas fa-question-circle w-6 text-center"></i><span>FAQ</span></a>
+                    <a href="#" id="nav-configuracoes" class="nav-link text-gray-300 hover:bg-[#6542D0]/50 hover:text-white flex items-center gap-3 p-3 rounded-lg font-semibold"><i class="fas fa-cog w-6 text-center"></i><span>Configurações</span></a>
+                </nav>
+            </div>
+            <div class="text-center text-gray-500 text-xs"><p>&copy; 2025 Bruno Zach. Todos os direitos reservados.</p></div>
+        </aside>
+        
+        <!-- Overlay para menu mobile -->
+        <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden"></div>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-4 sm:p-8 overflow-y-auto">
+            <!-- Header do Main Content com botão de menu -->
+            <header class="flex justify-between items-center mb-8">
+                <button id="menu-btn" class="text-white text-2xl lg:hidden">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h2 id="main-title" class="text-2xl sm:text-3xl font-bold text-white text-right flex-1">Tarefas Pendentes</h2>
+            </header>
+
+            <!-- Views -->
+            <div id="view-tarefas" class="view-content">
+                <div class="flex justify-end mb-8">
+                    <button id="addTaskBtn" class="action-button bg-[#E557AE] hover:bg-[#c44a94] text-white font-bold py-2 px-6 rounded-lg shadow-lg transition-transform transform hover:scale-105"><i class="fas fa-plus mr-2"></i> Nova Tarefa</button>
+                </div>
+                <div id="pending-tasks-container" class="item-grid-container"></div>
+            </div>
+
+            <div id="view-quadro" class="view-content hidden">
+                <div id="task-board" class="task-board-container">
+                    <div class="bg-[#1a0e3c] p-5 rounded-xl"><h3 class="text-xl font-bold mb-4 text-[#A188E3] border-b-2 border-[#A188E3]/30 pb-2">Concluídas</h3><div id="completed-tasks" class="space-y-4 min-h-[200px]"></div></div>
+                    <div class="bg-[#1a0e3c] p-5 rounded-xl"><h3 class="text-xl font-bold mb-4 text-[#A188E3] border-b-2 border-[#A188E3]/30 pb-2">Negadas</h3><div id="denied-tasks" class="space-y-4 min-h-[200px]"></div></div>
+                    <div class="bg-[#1a0e3c] p-5 rounded-xl"><h3 class="text-xl font-bold mb-4 text-[#A188E3] border-b-2 border-[#A188E3]/30 pb-2">Repassadas</h3><div id="forwarded-tasks" class="space-y-4 min-h-[200px]"></div></div>
+                </div>
+            </div>
+
+            <div id="view-anotacoes" class="view-content hidden"><div class="flex justify-end mb-8"><button data-type="notes" class="addItemBtn action-button bg-[#E557AE] hover:bg-[#c44a94] text-white font-bold py-2 px-6 rounded-lg"><i class="fas fa-plus mr-2"></i> Nova Anotação</button></div><div id="notes-container" class="item-grid-container"></div></div>
+            <div id="view-lembretes" class="view-content hidden"><div class="flex justify-end mb-8"><button data-type="reminders" class="addItemBtn action-button bg-[#E557AE] hover:bg-[#c44a94] text-white font-bold py-2 px-6 rounded-lg"><i class="fas fa-plus mr-2"></i> Novo Lembrete</button></div><div id="reminders-container" class="item-grid-container"></div></div>
+            <div id="view-manuais" class="view-content hidden"><div class="flex justify-end mb-8"><button data-type="manuals" class="addItemBtn action-button bg-[#E557AE] hover:bg-[#c44a94] text-white font-bold py-2 px-6 rounded-lg"><i class="fas fa-plus mr-2"></i> Novo Manual</button></div><div id="manuals-container" class="item-grid-container"></div></div>
+            <div id="view-contatos" class="view-content hidden"><div class="flex justify-end mb-8"><button data-type="contacts" class="addItemBtn action-button bg-[#E557AE] hover:bg-[#c44a94] text-white font-bold py-2 px-6 rounded-lg"><i class="fas fa-plus mr-2"></i> Novo Contato</button></div><div id="contacts-container" class="item-grid-container"></div></div>
+            <div id="view-faq" class="view-content hidden"><div class="flex justify-end mb-8"><button data-type="faq" class="addItemBtn action-button bg-[#E557AE] hover:bg-[#c44a94] text-white font-bold py-2 px-6 rounded-lg"><i class="fas fa-plus mr-2"></i> Novo FAQ</button></div><div id="faq-container" class="item-grid-container"></div></div>
+            
+            <div id="view-configuracoes" class="view-content hidden">
+                <div class="bg-[#1a0e3c] p-6 sm:p-8 rounded-xl max-w-2xl mx-auto space-y-8">
+                    <div>
+                        <h3 class="text-xl font-bold text-[#A188E3] mb-4">Relatórios</h3>
+                        <p class="text-gray-400 mb-6">Gere um relatório completo de todas as tarefas em formato CSV, compatível com Excel.</p>
+                        <button id="reportBtn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"><i class="fas fa-file-csv"></i> Emitir Relatório de Tarefas</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="taskModal" class="modal-backdrop fixed inset-0 flex items-center justify-center hidden"><div class="modal-content bg-[#1a0e3c] w-full max-w-2xl p-8 rounded-2xl shadow-2xl border border-[#6542D0]/50 transform transition-all scale-95 opacity-0" id="modal-content-task"><div class="flex justify-between items-center mb-6"><h3 class="text-2xl font-bold text-white">Criar Nova Tarefa</h3><button class="closeModalBtn text-gray-400 hover:text-white text-2xl">&times;</button></div><form id="taskForm"><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="md:col-span-2"><label for="taskTitle" class="block text-sm font-medium text-gray-300 mb-2">Título da Tarefa</label><input type="text" id="taskTitle" class="w-full bg-[#2a1a52] border border-[#6542D0] rounded-lg p-3" required></div><div><label for="taskUrgency" class="block text-sm font-medium text-gray-300 mb-2">Nível de Urgência</label><select id="taskUrgency" class="w-full bg-[#2a1a52] border border-[#6542D0] rounded-lg p-3"><option value="high">Alta</option><option value="medium">Média</option><option value="low">Baixa</option></select></div><div><label for="taskCreationDate" class="block text-sm font-medium text-gray-300 mb-2">Data de Criação</label><input type="date" id="taskCreationDate" class="w-full bg-[#2a1a52] border border-[#6542D0] rounded-lg p-3" required></div><div><label for="taskStartDate" class="block text-sm font-medium text-gray-300 mb-2">Previsão de Início</label><input type="date" id="taskStartDate" class="w-full bg-[#2a1a52] border border-[#6542D0] rounded-lg p-3"></div><div><label for="taskEndDate" class="block text-sm font-medium text-gray-300 mb-2">Previsão de Término</label><input type="date" id="taskEndDate" class="w-full bg-[#2a1a52] border border-[#6542D0] rounded-lg p-3"></div><div class="md:col-span-2"><label class="block text-sm font-medium text-gray-300 mb-2">Anexos</label><div class="dropzone bg-[#2a1a52] border-2 border-dashed border-[#6542D0] rounded-lg p-6 text-center cursor-pointer"><i class="fas fa-cloud-upload-alt text-4xl text-[#A188E3]"></i><p class="mt-2 text-gray-400">Arraste e solte</p><input type="file" class="fileInput hidden" multiple></div><div class="filePreview mt-4 space-y-2"></div></div></div><div class="mt-8 flex justify-end gap-4"><button type="button" class="cancelBtn bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg">Cancelar</button><button type="submit" class="action-button bg-[#E557AE] hover:bg-[#c44a94] text-white font-bold py-2 px-6 rounded-lg">Salvar Tarefa</button></div></form></div></div>
+    <div id="itemModal" class="modal-backdrop fixed inset-0 flex items-center justify-center hidden"><div class="modal-content bg-[#1a0e3c] w-full max-w-2xl p-8 rounded-2xl shadow-2xl border border-[#6542D0]/50 transform transition-all scale-95 opacity-0" id="modal-content-item"><div class="flex justify-between items-center mb-6"><h3 id="itemModalTitle" class="text-2xl font-bold text-white"></h3><button class="closeModalBtn text-gray-400 hover:text-white text-2xl">&times;</button></div><form id="itemForm"><div class="flex flex-col gap-6"><input type="hidden" id="itemType"><input type="hidden" id="itemId"><div><label for="itemTitle" id="itemTitleLabel" class="block text-sm font-medium text-gray-300 mb-2">Título</label><input type="text" id="itemTitle" class="w-full bg-[#2a1a52] border border-[#6542D0] rounded-lg p-3" required></div><div id="contact-fields" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6"><div><label for="itemPhone" class="block text-sm font-medium text-gray-300 mb-2">Telefone</label><input type="tel" id="itemPhone" class="w-full bg-[#2a1a52] border border-[#6542D0] rounded-lg p-3"></div><div><label for="itemEmail" class="block text-sm font-medium text-gray-300 mb-2">Email</label><input type="email" id="itemEmail" class="w-full bg-[#2a1a52] border border-[#6542D0] rounded-lg p-3"></div></div><div><label for="itemContent" id="itemContentLabel" class="block text-sm font-medium text-gray-300 mb-2">Conteúdo</label><textarea id="itemContent" rows="6" class="w-full bg-[#2a1a52] border border-[#6542D0] rounded-lg p-3"></textarea></div><div><label class="block text-sm font-medium text-gray-300 mb-2">Anexos</label><div class="dropzone bg-[#2a1a52] border-2 border-dashed border-[#6542D0] rounded-lg p-6 text-center cursor-pointer"><i class="fas fa-cloud-upload-alt text-4xl text-[#A188E3]"></i><p class="mt-2 text-gray-400">Arraste e solte</p><input type="file" class="fileInput hidden" multiple></div><div class="filePreview mt-4 space-y-2"></div></div></div><div class="mt-8 flex justify-end gap-4"><button type="button" class="cancelBtn bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg">Cancelar</button><button type="submit" class="action-button bg-[#E557AE] hover:bg-[#c44a94] text-white font-bold py-2 px-6 rounded-lg">Salvar</button></div></form></div></div>
+    <div id="resolutionModal" class="modal-backdrop fixed inset-0 flex items-center justify-center hidden"><div class="modal-content bg-[#1a0e3c] w-full max-w-2xl p-8 rounded-2xl shadow-2xl border border-[#6542D0]/50 transform transition-all scale-95 opacity-0" id="modal-content-resolution"><div class="flex justify-between items-center mb-6"><h3 class="text-2xl font-bold text-white">Finalizar Tarefa</h3><button class="closeModalBtn text-gray-400 hover:text-white text-2xl">&times;</button></div><form id="resolutionForm"><div class="flex flex-col gap-6"><input type="hidden" id="resolutionTaskId"><div><label for="resolutionStatus" class="block text-sm font-medium text-gray-300 mb-2">Status Final</label><select id="resolutionStatus" class="w-full bg-[#2a1a52] border border-[#6542D0] rounded-lg p-3"><option value="completed">Concluída</option><option value="denied">Negada</option><option value="forwarded">Repassada</option></select></div><div><label for="resolutionSummary" class="block text-sm font-medium text-gray-300 mb-2">Resumo da Solução</label><textarea id="resolutionSummary" rows="4" class="w-full bg-[#2a1a52] border border-[#6542D0] rounded-lg p-3"></textarea></div><div><label class="block text-sm font-medium text-gray-300 mb-2">Adicionar Anexos</label><div class="dropzone bg-[#2a1a52] border-2 border-dashed border-[#6542D0] rounded-lg p-6 text-center cursor-pointer"><i class="fas fa-cloud-upload-alt text-4xl text-[#A188E3]"></i><p class="mt-2 text-gray-400">Arraste e solte</p><input type="file" class="fileInput hidden" multiple></div><div class="filePreview mt-4 space-y-2"></div></div></div><div class="mt-8 flex justify-end gap-4"><button type="button" class="cancelBtn bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg">Cancelar</button><button type="submit" class="action-button bg-[#E557AE] hover:bg-[#c44a94] text-white font-bold py-2 px-6 rounded-lg">Confirmar</button></div></form></div></div>
+    <div id="notificationModal" class="modal-backdrop fixed inset-0 flex items-center justify-center hidden"><div class="modal-content bg-[#1a0e3c] w-full max-w-md p-8 rounded-2xl shadow-2xl border border-[#6542D0]/50 text-center"><div id="notificationIcon" class="text-4xl mb-4"></div><h3 id="notificationTitle" class="text-2xl font-bold text-white mb-2"></h3><p id="notificationMessage" class="text-gray-300 mb-6"></p><div id="notificationActions" class="flex justify-center gap-4"></div></div></div>
+
+    <script>
+        // --- Configuração do Supabase ---
+        const SUPABASE_URL = 'https://kjpysisxczepkygcrxlz.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqcHlzaXN4Y3plcGt5Z2NyeGx6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3NzM1ODUsImV4cCI6MjA3MTM0OTU4NX0.5hszrAKMiXpj9bh27LA_zNSo_vmUB2n2dm7ihEs2Yhg';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Mapeamento de tipos para facilitar o acesso
+        const itemTypes = {
+            notes: { container: 'notes-container', title: 'Anotação' },
+            reminders: { container: 'reminders-container', title: 'Lembrete' },
+            manuals: { container: 'manuals-container', title: 'Manual' },
+            contacts: { container: 'contacts-container', title: 'Contato' },
+            faq: { container: 'faq-container', title: 'FAQ' }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const mainContent = document.querySelector('main');
+            let attachedFiles = [];
+
+            // --- Lógica de Notificação ---
+            const notificationModal = document.getElementById('notificationModal');
+            const showNotification = (config) => {
+                notificationModal.querySelector('#notificationIcon').innerHTML = config.icon;
+                notificationModal.querySelector('#notificationTitle').textContent = config.title;
+                notificationModal.querySelector('#notificationMessage').textContent = config.message;
+                const actionsContainer = notificationModal.querySelector('#notificationActions');
+                actionsContainer.innerHTML = '';
+                if (config.actions) {
+                    config.actions.forEach(action => {
+                        const button = document.createElement('button');
+                        button.textContent = action.text;
+                        button.className = action.class;
+                        button.onclick = () => { hideNotification(); if (action.handler) action.handler(); };
+                        actionsContainer.appendChild(button);
+                    });
+                } else {
+                    const okButton = document.createElement('button');
+                    okButton.textContent = 'OK';
+                    okButton.className = 'bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg';
+                    okButton.onclick = hideNotification;
+                    actionsContainer.appendChild(okButton);
+                }
+                notificationModal.classList.remove('hidden');
+            };
+            const hideNotification = () => notificationModal.classList.add('hidden');
+
+            // --- Lógica de Modal Genérica ---
+            const setupModal = (modal, openTriggers, content) => {
+                const openModal = () => { modal.classList.remove('hidden'); setTimeout(() => content.classList.remove('scale-95', 'opacity-0'), 10); };
+                const closeModal = () => { content.classList.add('scale-95', 'opacity-0'); setTimeout(() => modal.classList.add('hidden'), 200); };
+                openTriggers.forEach(trigger => trigger.addEventListener('click', openModal));
+                modal.querySelectorAll('.closeModalBtn, .cancelBtn').forEach(btn => btn.addEventListener('click', closeModal));
+                modal.addEventListener('click', (e) => e.target === modal && closeModal());
+                return { openModal, closeModal };
+            };
+
+            const taskModalControls = setupModal(document.getElementById('taskModal'), [document.getElementById('addTaskBtn')], document.getElementById('modal-content-task'));
+            const itemModalControls = setupModal(document.getElementById('itemModal'), [], document.getElementById('modal-content-item'));
+            const resolutionModalControls = setupModal(document.getElementById('resolutionModal'), [], document.getElementById('modal-content-resolution'));
+
+            // --- Lógica de Navegação e Menu Mobile ---
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebar-overlay');
+            const menuBtn = document.getElementById('menu-btn');
+            const mainTitle = document.getElementById('main-title');
+
+            const toggleSidebar = () => {
+                sidebar.classList.toggle('-translate-x-full');
+                sidebarOverlay.classList.toggle('hidden');
+            };
+
+            menuBtn.addEventListener('click', toggleSidebar);
+            sidebarOverlay.addEventListener('click', toggleSidebar);
+
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    document.querySelectorAll('.nav-link').forEach(l => l.classList.replace('bg-[#6542D0]', 'text-gray-300'));
+                    link.classList.replace('text-gray-300', 'bg-[#6542D0]');
+                    const targetViewId = 'view-' + link.id.split('-')[1];
+                    document.querySelectorAll('.view-content').forEach(view => view.classList.toggle('hidden', view.id !== targetViewId));
+                    
+                    const titleText = link.querySelector('span').textContent;
+                    mainTitle.textContent = (link.id === 'nav-tarefas') ? "Tarefas Pendentes" : (link.id === 'nav-quadro') ? "Quadro de Tarefas" : titleText;
+
+                    if (window.innerWidth < 1024) {
+                        toggleSidebar();
+                    }
+                });
+            });
+
+            // --- Funções Auxiliares ---
+            const getFileIcon = (fileName) => {
+                const extension = fileName.split('.').pop().toLowerCase();
+                if (['pdf'].includes(extension)) return { class: 'fas fa-file-pdf', color: 'text-red-400' };
+                if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extension)) return { class: 'fas fa-file-image', color: 'text-green-400' };
+                if (['mp4', 'mov', 'avi', 'mkv'].includes(extension)) return { class: 'fas fa-file-video', color: 'text-blue-400' };
+                if (['xls', 'xlsx', 'csv'].includes(extension)) return { class: 'fas fa-file-excel', color: 'text-green-600' };
+                return { class: 'fas fa-file-alt', color: 'text-gray-400' };
+            };
+            const formatDate = (dateString) => dateString ? new Date(dateString.replace(/-/g, '\/')).toLocaleDateString('pt-BR') : 'N/A';
+
+            // --- Lógica de Relatório ---
+            document.getElementById('reportBtn').addEventListener('click', async () => {
+                const { data: tasks, error } = await supabaseClient.from('tasks').select('*');
+                if (error || tasks.length === 0) {
+                    showNotification({ icon: '<i class="fas fa-info-circle text-blue-400"></i>', title: 'Relatório Vazio', message: 'Não há tarefas para incluir no relatório.' });
+                    return;
+                }
+                const headers = ["ID", "Titulo", "Status", "Urgencia", "DataCriacao", "DataInicio", "DataFim", "ResumoSolucao"];
+                const csvRows = [headers.join(",")];
+                tasks.forEach(task => {
+                    const row = [
+                        task.id, `"${task.title.replace(/"/g, '""')}"`, task.status, task.urgency,
+                        formatDate(task.creationDate), formatDate(task.startDate), formatDate(task.endDate),
+                        `"${(task.resolutionSummary || '').replace(/"/g, '""')}"`
+                    ];
+                    csvRows.push(row.join(","));
+                });
+                const blob = new Blob([csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `relatorio-tarefas-${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+            });
+
+            // --- Lógica de Renderização ---
+            const createAttachmentsHTML = (attachments) => {
+                if (!attachments || attachments.length === 0) return '';
+                let html = `<div class="mt-4 border-t border-white/10 pt-3"><h5 class="font-semibold text-sm mb-2 text-[#A188E3]">Anexos:</h5>`;
+                attachments.forEach(file => {
+                    const { data: { publicUrl } } = supabaseClient.storage.from('attachments').getPublicUrl(file.path);
+                    const icon = getFileIcon(file.name);
+                    html += `<div class="file-list-item flex items-center justify-between p-2 rounded-md"><div class="flex items-center gap-2"><i class="${icon.class} ${icon.color}"></i><span class="text-sm truncate max-w-[150px]">${file.name}</span></div><a href="${publicUrl}" target="_blank" class="download-btn text-blue-400 hover:text-blue-300"><i class="fas fa-download"></i></a></div>`;
+                });
+                return html + `</div>`;
+            };
+
+            const createPendingTaskCard = (task) => {
+                const card = document.createElement('div');
+                card.className = `task-card p-4 rounded-lg shadow-md urgency-${task.urgency}`;
+                card.dataset.taskId = task.id;
+                card.innerHTML = `<div class="flex-grow"><h4 class="font-bold text-lg">${task.title}</h4><p class="text-sm text-gray-400 mb-3">Criado em: ${formatDate(task.creationDate)}</p><div class="flex justify-between text-xs text-gray-300 mb-3"><span><i class="far fa-calendar-alt mr-1"></i> Início: ${formatDate(task.startDate)}</span><span><i class="far fa-calendar-check mr-1"></i> Fim: ${formatDate(task.endDate)}</span></div>${createAttachmentsHTML(task.attachments)}</div><div class="mt-4 pt-4 border-t border-white/10"><button class="w-full finalize-task-btn bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-lg">Finalizar</button></div>`;
+                document.getElementById('pending-tasks-container').appendChild(card);
+            };
+
+            const createCompletedTaskCard = (task) => {
+                const card = document.createElement('div');
+                card.className = `task-card p-4 rounded-lg shadow-md urgency-${task.urgency}`;
+                card.dataset.taskId = task.id;
+                card.innerHTML = `<h4 class="font-bold text-lg">${task.title}</h4><p class="text-sm text-gray-400 mb-3">Criado em: ${formatDate(task.creationDate)}</p>${task.resolutionSummary ? `<div class="mt-2 mb-3 p-3 bg-black/20 rounded-lg"><h5 class="font-semibold text-sm mb-1 text-[#A188E3]">Resumo:</h5><p class="text-sm text-gray-300 whitespace-pre-wrap">${task.resolutionSummary}</p></div>` : ''}${createAttachmentsHTML(task.attachments)}`;
+                const containerId = { completed: 'completed-tasks', denied: 'denied-tasks', forwarded: 'forwarded-tasks' }[task.status];
+                if (containerId) document.getElementById(containerId).appendChild(card);
+            };
+
+            const createItemCard = (item, type) => {
+                const card = document.createElement('div');
+                card.className = 'item-card p-4 rounded-lg shadow-md';
+                card.dataset.itemId = item.id;
+                let contactInfo = '';
+                if (type === 'contacts') {
+                    const cleanPhone = item.phone ? item.phone.replace(/\D/g, '') : '';
+                    contactInfo = `<div class="space-y-2 mt-3 mb-3 text-sm">${item.phone ? `<div class="flex items-center justify-between"><div class="flex items-center gap-2 text-gray-300"><i class="fas fa-phone w-4 text-center text-[#A188E3]"></i><span>${item.phone}</span></div><a href="https://wa.me/${cleanPhone}" target="_blank" class="text-green-400 hover:text-green-300 text-lg" title="Abrir no WhatsApp"><i class="fab fa-whatsapp"></i></a></div>` : ''}${item.email ? `<div class="flex items-center justify-between"><div class="flex items-center gap-2 text-gray-300"><i class="fas fa-envelope w-4 text-center text-[#A188E3]"></i><span class="truncate" title="${item.email}">${item.email}</span></div><a href="mailto:${item.email}" class="text-blue-400 hover:text-blue-300 text-lg" title="Enviar Email"><i class="fas fa-paper-plane"></i></a></div>` : ''}</div>`;
+                }
+                card.innerHTML = `<h4 class="font-bold text-lg mb-2">${item.title}</h4>${contactInfo}<p class="text-gray-400 text-sm whitespace-pre-wrap">${item.content || ''}</p>${createAttachmentsHTML(item.attachments)}`;
+                document.getElementById(itemTypes[type].container).appendChild(card);
+            };
+
+            const loadAndRenderTasks = async () => {
+                document.getElementById('pending-tasks-container').innerHTML = '';
+                ['completed-tasks', 'denied-tasks', 'forwarded-tasks'].forEach(id => document.getElementById(id).innerHTML = '');
+                const { data: allTasks, error } = await supabaseClient.from('tasks').select('*').order('created_at', { ascending: false });
+                if (error) { console.error('Erro ao carregar tarefas:', error); return; }
+                allTasks.forEach(task => {
+                    if (task.status === 'pending') {
+                        createPendingTaskCard(task);
+                    } else {
+                        createCompletedTaskCard(task);
+                    }
+                });
+            };
+            
+            const loadAndRenderItems = async (type) => {
+                const { container } = itemTypes[type];
+                document.getElementById(container).innerHTML = '';
+                const { data: allItems, error } = await supabaseClient.from(type).select('*').order('created_at', { ascending: false });
+                if (error) { console.error(`Erro ao carregar ${type}:`, error); return; }
+                allItems.forEach(item => createItemCard(item, type));
+            };
+
+            // --- Lógica de Formulários e Upload ---
+            const uploadFiles = async (files, parentId, parentType) => {
+                if (files.length === 0) return [];
+                const uploadPromises = files.map(file => {
+                    const filePath = `${parentType}/${parentId}/${Date.now()}-${file.name}`;
+                    return supabaseClient.storage.from('attachments').upload(filePath, file);
+                });
+                const results = await Promise.all(uploadPromises);
+                return results.map(result => ({ name: result.data.path.split('/').pop(), path: result.data.path }));
+            };
+
+            const setupForm = (form, modalControls, onSave) => {
+                const fileInput = form.querySelector('.fileInput');
+                const dropzone = form.querySelector('.dropzone');
+                const filePreview = form.querySelector('.filePreview');
+                const updateFilePreview = () => {
+                    filePreview.innerHTML = '';
+                    attachedFiles.forEach((file, index) => {
+                        const icon = getFileIcon(file.name);
+                        filePreview.innerHTML += `<div class="file-list-item flex items-center justify-between p-2 rounded-md"><div class="flex items-center gap-2"><i class="${icon.class} ${icon.color}"></i><span class="text-sm">${file.name}</span></div><button type="button" class="text-red-400 hover:text-red-300 remove-file-btn" data-index="${index}"><i class="fas fa-trash"></i></button></div>`;
+                    });
+                };
+                const handleFiles = (files) => { for (const file of files) { if (!attachedFiles.some(f => f.name === file.name)) attachedFiles.push(file); } updateFilePreview(); };
+                dropzone.addEventListener('click', () => fileInput.click());
+                ['dragover', 'dragleave', 'drop'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropzone.classList.toggle('border-[#E557AE]', evt === 'dragover'); if (evt === 'drop') handleFiles(e.dataTransfer.files); }));
+                fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+                filePreview.addEventListener('click', (e) => { const btn = e.target.closest('.remove-file-btn'); if (btn) { attachedFiles.splice(btn.dataset.index, 1); updateFilePreview(); } });
+                form.addEventListener('submit', async (e) => { e.preventDefault(); await onSave(form); form.reset(); attachedFiles = []; updateFilePreview(); modalControls.closeModal(); });
+            };
+
+            setupForm(document.getElementById('taskForm'), taskModalControls, async (form) => {
+                const taskData = { title: form.taskTitle.value, urgency: form.taskUrgency.value, creationDate: form.taskCreationDate.value, startDate: form.taskStartDate.value, endDate: form.taskEndDate.value, status: 'pending', attachments: [] };
+                const { data, error } = await supabaseClient.from('tasks').insert(taskData).select().single();
+                if (error) { console.error('Erro ao criar tarefa:', error); return; }
+                const uploadedFiles = await uploadFiles(attachedFiles, data.id, 'tasks');
+                await supabaseClient.from('tasks').update({ attachments: uploadedFiles }).eq('id', data.id);
+                await loadAndRenderTasks();
+            });
+
+            setupForm(document.getElementById('itemForm'), itemModalControls, async (form) => {
+                const type = form.itemType.value;
+                const itemData = { title: form.itemTitle.value, content: form.itemContent.value, attachments: [] };
+                if (type === 'contacts') { itemData.phone = form.itemPhone.value; itemData.email = form.itemEmail.value; }
+                const { data, error } = await supabaseClient.from(type).insert(itemData).select().single();
+                if (error) { console.error(`Erro ao criar ${type}:`, error); return; }
+                const uploadedFiles = await uploadFiles(attachedFiles, data.id, type);
+                await supabaseClient.from(type).update({ attachments: uploadedFiles }).eq('id', data.id);
+                await loadAndRenderItems(type);
+            });
+            
+            setupForm(document.getElementById('resolutionForm'), resolutionModalControls, async (form) => {
+                const taskId = parseInt(form.resolutionTaskId.value);
+                const { data: task } = await supabaseClient.from('tasks').select('attachments').eq('id', taskId).single();
+                const uploadedFiles = await uploadFiles(attachedFiles, taskId, 'tasks');
+                const updatedAttachments = (task.attachments || []).concat(uploadedFiles);
+                await supabaseClient.from('tasks').update({ status: form.resolutionStatus.value, resolutionSummary: form.resolutionSummary.value, attachments: updatedAttachments }).eq('id', taskId);
+                await loadAndRenderTasks();
+            });
+
+            // --- Event Listeners Dinâmicos (na 'main') ---
+            mainContent.addEventListener('click', async (e) => {
+                const finalizeBtn = e.target.closest('.finalize-task-btn');
+                const addItemBtn = e.target.closest('.addItemBtn');
+
+                if (finalizeBtn) {
+                    const card = finalizeBtn.closest('.task-card');
+                    const taskId = parseInt(card.dataset.taskId);
+                    const form = document.getElementById('resolutionForm');
+                    form.reset();
+                    attachedFiles = [];
+                    form.querySelector('.filePreview').innerHTML = '';
+                    form.resolutionTaskId.value = taskId;
+                    resolutionModalControls.openModal();
+                }
+
+                if (addItemBtn) {
+                    const type = addItemBtn.dataset.type;
+                    const { title } = itemTypes[type];
+                    const form = document.getElementById('itemForm');
+                    form.reset();
+                    attachedFiles = [];
+                    form.querySelector('.filePreview').innerHTML = '';
+                    document.getElementById('itemModalTitle').textContent = `Novo ${title}`;
+                    form.itemType.value = type;
+                    const contactFields = document.getElementById('contact-fields');
+                    const itemTitleLabel = document.getElementById('itemTitleLabel');
+                    const itemContentLabel = document.getElementById('itemContentLabel');
+                    if (type === 'contacts') { contactFields.classList.remove('hidden'); itemTitleLabel.textContent = 'Nome'; itemContentLabel.textContent = 'Notas'; } 
+                    else { contactFields.classList.add('hidden'); itemTitleLabel.textContent = 'Título'; itemContentLabel.textContent = 'Conteúdo'; }
+                    itemModalControls.openModal();
+                }
+            });
+
+            // --- Inicialização ---
+            const loadAllData = async () => {
+                await loadAndRenderTasks();
+                for (const type of Object.keys(itemTypes)) {
+                    await loadAndRenderItems(type);
+                }
+            };
+            
+            document.getElementById('taskForm').reset();
+            document.getElementById('taskCreationDate').valueAsDate = new Date();
+            loadAllData();
+        });
+    </script>
+</body>
+</html>
